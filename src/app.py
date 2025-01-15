@@ -5,13 +5,9 @@ from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from langchain_community.vectorstores import Chroma
-
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
 from langchain_google_genai import ChatGoogleGenerativeAI
-
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-
 from langchain.chains import create_history_aware_retriever
 
 
@@ -23,6 +19,8 @@ load_dotenv()
 
 def get_response(prompt):
     return "Respuesta por default."
+
+
 
 def get_vectorstore_from_url(url):
     loader = WebBaseLoader(url)
@@ -40,11 +38,14 @@ def get_vectorstore_from_url(url):
         model="gemini-1.5-flash"
         )
 
-    path_db = "/content/VectorDB" # @param {type:"string"}
+    path_db = "./content/VectorDB" # @param {type:"string"}
 
-    vector_store = Chroma(persist_directory=path_db)
+    vector_store = Chroma(
+        embedding_function=embeddings,
+        persist_directory="path_db"  # Ajusta esta ruta al directorio donde guardas tu base de datos
+    )
 
-    vector_store.add_documents(document_chunks, embeddings)
+    vector_store.add_documents(document_chunks)
 
     return vector_store
 
@@ -54,14 +55,14 @@ def get_context_retriever_chain(vector_store):
     if not api_key:
         raise ValueError("GOOGLE_API_KEY environment variable is not set")
 
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
 
-    retriever = vector_store.as_retriever()
+    retriever = vector_store
 
-    prompt = ChatPromptTemplate.from_messages([
+    prompt = ChatPromptTemplate([
         MessagesPlaceholder(variable_name="chat_history"),
-        ("user", "{input}"),
-        ("user", "Given the above conversation, generate a search query to look up in order to get information relevant to the conversation")
+        ("human", "{input}"),
+        ("system", "Given the above conversation, generate a search query to look up in order to get information relevant to the conversation")
     ])
 
     retriever_chain = create_history_aware_retriever(llm, retriever, prompt)
@@ -114,8 +115,6 @@ else:
             "input": prompt
         })
         st.write(retrieved_documents)
-
-     
 
     for message in st.session_state.chat_history:
         if isinstance(message, AIMessage):
